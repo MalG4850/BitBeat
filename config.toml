@@ -1,0 +1,14 @@
+repository_url = "https://raw.githubusercontent.com/learn-music-theory/music-assets/main/catalog.json"
+default_folder = "music"
+
+[keybindings]
+quit = "q"
+play_pause = " "
+next_track = "n"
+prev_track = "p"
+fast_forward = "l"
+rewind = "h"
+
+[audio]
+skip_interval_seconds = 10
+default_volume = 50
