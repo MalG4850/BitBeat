@@ -28,6 +28,7 @@ type Decoder interface {
 type mp3DecoderWrap struct {
 	*mp3.Decoder
 	closer io.Closer
+	engine *Engine
 }
 
 func (m *mp3DecoderWrap) Length() int64 {
@@ -39,6 +40,16 @@ func (m *mp3DecoderWrap) Close() error {
 		m.closer.Close()
 	}
 	return nil
+}
+
+func (m *mp3DecoderWrap) Read(p []byte) (n int, err error) {
+	n, err = m.Decoder.Read(p)
+	if err == io.EOF {
+		m.engine.mu.Lock()
+		m.engine.eofReached = true
+		m.engine.mu.Unlock()
+	}
+	return n, err
 }
 
 type AudioEngine interface {
@@ -64,7 +75,8 @@ type Engine struct {
 	totalSeconds   float64
 	currentSeconds float64
 	
-	done chan struct{}
+	eofReached bool
+	done       chan struct{}
 }
 
 func NewEngine() (*Engine, error) {
@@ -87,6 +99,12 @@ func NewEngine() (*Engine, error) {
 	}, nil
 }
 
+func (e *Engine) IsFinished() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.eofReached && e.status == StatusPlaying
+}
+
 func (e *Engine) LoadStream(stream io.ReadCloser, filename string, url string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -98,7 +116,8 @@ func (e *Engine) LoadStream(stream io.ReadCloser, filename string, url string) e
 		e.currentStream.Close()
 	}
 
-	var decoder Decoder
+	e.eofReached = false
+
 	var finalStream io.ReadCloser = stream
 
 	ext := strings.ToLower(filename)
@@ -132,9 +151,7 @@ func (e *Engine) LoadStream(stream io.ReadCloser, filename string, url string) e
 		return err
 	}
 	
-	decoder = &mp3DecoderWrap{Decoder: d, closer: finalStream}
-
-	e.decoder = decoder
+	e.decoder = &mp3DecoderWrap{Decoder: d, closer: finalStream, engine: e}
 	e.player = e.ctx.NewPlayer(e.decoder)
 	e.currentStream = finalStream
 	

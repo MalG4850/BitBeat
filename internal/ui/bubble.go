@@ -15,6 +15,7 @@ import (
 )
 
 type tickMsg time.Time
+type playSuccessMsg struct{}
 
 type sessionState int
 
@@ -24,21 +25,25 @@ const (
 )
 
 type Model struct {
-	config    *config.Config
-	client    *network.Client
-	engine    *audio.Engine
-	entries   []network.Entry
-	cursor    int
-	err       error
-	ready     bool
-	width     int
-	height    int
-	currSec   float64
-	totSec    float64
-	status    audio.PlaybackStatus
-	state     sessionState
-	textInput textinput.Model
-	currPath  string
+	config         *config.Config
+	client         *network.Client
+	engine         *audio.Engine
+	entries        []network.Entry
+	playingEntries []network.Entry
+	playingIndex   int
+	playingPath    string
+	cursor         int
+	err            error
+	ready          bool
+	width          int
+	height         int
+	currSec        float64
+	totSec         float64
+	status         audio.PlaybackStatus
+	state          sessionState
+	textInput      textinput.Model
+	currPath       string
+	loading        bool
 }
 
 func NewModel(cfg *config.Config, client *network.Client, engine *audio.Engine) Model {
@@ -49,12 +54,13 @@ func NewModel(cfg *config.Config, client *network.Client, engine *audio.Engine) 
 	ti.Width = 50
 
 	return Model{
-		config:    cfg,
-		client:    client,
-		engine:    engine,
-		status:    audio.StatusStopped,
-		state:     stateInputting,
-		textInput: ti,
+		config:       cfg,
+		client:       client,
+		engine:       engine,
+		status:       audio.StatusStopped,
+		state:        stateInputting,
+		textInput:    ti,
+		playingIndex: -1,
 	}
 }
 
@@ -91,7 +97,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.currSec, m.totSec = m.engine.GetProgress()
 		m.status = m.engine.GetStatus()
+		if !m.loading && m.engine.IsFinished() {
+			m.loading = true
+			return m.nextSong()
+		}
 		return m, tick()
+
+	case playSuccessMsg:
+		m.loading = false
+		m.err = nil
+		return m, nil
 
 	case []network.Entry:
 		m.entries = msg
@@ -100,6 +115,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case error:
 		m.err = msg
+		m.loading = false
 		return m, nil
 	}
 
@@ -146,6 +162,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.cursor = 0
 						return m, m.fetchEntries(m.currPath)
 					}
+					m.playingEntries = m.entries
+					m.playingIndex = m.cursor
+					m.playingPath = m.currPath
+					m.loading = true
 					return m, m.playEntry(entry)
 				}
 			case "backspace":
@@ -176,6 +196,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) nextSong() (tea.Model, tea.Cmd) {
+	if len(m.playingEntries) == 0 {
+		m.loading = false
+		return m, nil
+	}
+
+	startIdx := m.playingIndex
+	nextIdx := (startIdx + 1) % len(m.playingEntries)
+
+	// Find next non-folder entry
+	for nextIdx != startIdx {
+		if !m.playingEntries[nextIdx].IsFolder {
+			m.playingIndex = nextIdx
+			if m.currPath == m.playingPath {
+				m.cursor = nextIdx
+			}
+			return m, m.playEntry(m.playingEntries[nextIdx])
+		}
+		nextIdx = (nextIdx + 1) % len(m.playingEntries)
+	}
+
+	// If we looped back and it's not a folder, play it anyway
+	if !m.playingEntries[startIdx].IsFolder {
+		return m, m.playEntry(m.playingEntries[startIdx])
+	}
+
+	m.loading = false
+	return m, nil
+}
+
 func (m Model) playEntry(entry network.Entry) tea.Cmd {
 	return func() tea.Msg {
 		if entry.URL == "" {
@@ -201,7 +251,7 @@ func (m Model) playEntry(entry network.Entry) tea.Cmd {
 			return err
 		}
 		m.engine.Play()
-		return nil
+		return playSuccessMsg{}
 	}
 }
 
