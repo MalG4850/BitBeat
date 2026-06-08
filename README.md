@@ -114,4 +114,4 @@ This is done asynchronously before playback begins, ensuring the user always see
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
-This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
+This project is licensed under the GPLv3 License - see the LICENSE file for details.
