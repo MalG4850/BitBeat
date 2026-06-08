@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/ebitengine/oto/v3"
-	"github.com/hajimehoshi/go-mp3"
 )
 
 type PlaybackStatus int
@@ -22,34 +21,6 @@ const (
 type Decoder interface {
 	io.ReadSeeker
 	Length() int64
-}
-
-// mp3DecoderWrap wraps mp3.Decoder to match our Decoder interface
-type mp3DecoderWrap struct {
-	*mp3.Decoder
-	closer io.Closer
-	engine *Engine
-}
-
-func (m *mp3DecoderWrap) Length() int64 {
-	return m.Decoder.Length()
-}
-
-func (m *mp3DecoderWrap) Close() error {
-	if m.closer != nil {
-		m.closer.Close()
-	}
-	return nil
-}
-
-func (m *mp3DecoderWrap) Read(p []byte) (n int, err error) {
-	n, err = m.Decoder.Read(p)
-	if err == io.EOF {
-		m.engine.mu.Lock()
-		m.engine.eofReached = true
-		m.engine.mu.Unlock()
-	}
-	return n, err
 }
 
 type AudioEngine interface {
@@ -67,7 +38,7 @@ type Engine struct {
 	ctx           *oto.Context
 	player        *oto.Player
 	decoder       Decoder
-	currentStream io.ReadCloser
+	currentStream io.Closer
 	status        PlaybackStatus
 	volume        float64
 	mu            sync.Mutex
@@ -118,46 +89,58 @@ func (e *Engine) LoadStream(stream io.ReadCloser, filename string, url string) e
 
 	e.eofReached = false
 
-	var finalStream io.ReadCloser = stream
-
 	ext := strings.ToLower(filename)
-	isM4A := strings.HasSuffix(ext, ".m4a") || strings.HasSuffix(ext, ".aac") || strings.HasSuffix(ext, ".mp4")
+	isMP3 := strings.HasSuffix(ext, ".mp3")
+	isM4A := strings.HasSuffix(ext, ".m4a") || strings.HasSuffix(ext, ".mp4")
+	isAAC := strings.HasSuffix(ext, ".aac")
+	isOpus := strings.HasSuffix(ext, ".opus")
+	_ = isMP3 // Kept for explicit design reference as requested
+
+	isTranscodedFormat := isM4A || isAAC || isOpus
 
 	// Try to get duration using ffprobe
 	duration, _ := probeDuration(url)
 	e.totalSeconds = duration
 
-	if isM4A {
-		// Use FFmpeg to transcode M4A to MP3 on the fly
-		cmd := exec.Command("ffmpeg", "-i", "pipe:0", "-f", "mp3", "pipe:1")
-		cmd.Stdin = stream
-		stdout, err := cmd.StdoutPipe()
+	if isTranscodedFormat {
+		if !hasFFmpeg() {
+			return fmt.Errorf("ffmpeg is not installed, cannot play %s", ext)
+		}
+		if err := e.loadTranscoded(stream, stream); err != nil {
+			return err
+		}
+	} else if isMP3 {
+		// Attempt to load raw MP3
+		pr, err := e.loadRawMP3(stream)
 		if err != nil {
-			return fmt.Errorf("failed to create ffmpeg pipe: %v", err)
+			// Fallback to transcoding if raw MP3 decoding failed and we have FFmpeg
+			if hasFFmpeg() {
+				combined := io.MultiReader(&pr.buf, pr.underlying)
+				if errTrans := e.loadTranscoded(combined, stream); errTrans != nil {
+					return fmt.Errorf("MP3 decoding failed, fallback transcoding failed: %v", errTrans)
+				}
+			} else {
+				return fmt.Errorf("MP3 decoding failed: %v. This file might be corrupt or use an unsupported format (like MPEG 2.5).", err)
+			}
+		} else {
+			e.currentStream = stream
 		}
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("failed to start ffmpeg: %v. Is ffmpeg installed?", err)
+	} else {
+		// Unknown format, try to transcode
+		if hasFFmpeg() {
+			if err := e.loadTranscoded(stream, stream); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unsupported format %s and ffmpeg is not installed", ext)
 		}
-		
-		// Wrap stdout to ensure we can close it and wait for cmd
-		finalStream = &ffmpegCloser{ReadCloser: stdout, cmd: cmd}
 	}
 
-	d, err := mp3.NewDecoder(finalStream)
-	if err != nil {
-		if !isM4A {
-			return fmt.Errorf("MP3 decoding failed: %v. This file might be corrupt or use an unsupported bitrate.", err)
-		}
-		return err
-	}
-	
-	e.decoder = &mp3DecoderWrap{Decoder: d, closer: finalStream, engine: e}
 	e.player = e.ctx.NewPlayer(e.decoder)
-	e.currentStream = finalStream
 	
 	// Only override duration if we couldn't probe it and Length() is valid
 	if e.totalSeconds <= 0 {
-		e.totalSeconds = float64(d.Length()) / float64(44100*4)
+		e.totalSeconds = float64(e.decoder.Length()) / float64(44100*4)
 	}
 	
 	e.currentSeconds = 0
@@ -179,20 +162,6 @@ func probeDuration(url string) (float64, error) {
 	var duration float64
 	fmt.Sscanf(string(out), "%f", &duration)
 	return duration, nil
-}
-
-type ffmpegCloser struct {
-	io.ReadCloser
-	cmd *exec.Cmd
-}
-
-func (f *ffmpegCloser) Close() error {
-	err := f.ReadCloser.Close()
-	if f.cmd.Process != nil {
-		f.cmd.Process.Kill()
-	}
-	f.cmd.Wait()
-	return err
 }
 
 func (e *Engine) Play() {

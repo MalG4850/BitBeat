@@ -24,6 +24,11 @@ const (
 	stateInputting
 )
 
+const (
+	pageSize     = 10
+	scrollBuffer = 2
+)
+
 type Model struct {
 	config         *config.Config
 	client         *network.Client
@@ -33,6 +38,7 @@ type Model struct {
 	playingIndex   int
 	playingPath    string
 	cursor         int
+	scrollOffset   int
 	err            error
 	ready          bool
 	width          int
@@ -111,6 +117,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case []network.Entry:
 		m.entries = msg
 		m.err = nil
+		m.scrollOffset = 0
 		return m, nil
 
 	case error:
@@ -149,10 +156,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "up", "k":
 				if m.cursor > 0 {
 					m.cursor--
+					m.adjustScrollOffset()
 				}
 			case "down", "j":
 				if m.cursor < len(m.entries)-1 {
 					m.cursor++
+					m.adjustScrollOffset()
 				}
 			case "enter":
 				if len(m.entries) > 0 {
@@ -160,6 +169,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if entry.IsFolder {
 						m.currPath = entry.Path
 						m.cursor = 0
+						m.scrollOffset = 0
 						return m, m.fetchEntries(m.currPath)
 					}
 					m.playingEntries = m.entries
@@ -174,6 +184,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if len(parts) > 0 {
 						m.currPath = strings.Join(parts[:len(parts)-1], "/")
 						m.cursor = 0
+						m.scrollOffset = 0
 						return m, m.fetchEntries(m.currPath)
 					}
 				}
@@ -196,6 +207,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *Model) adjustScrollOffset() {
+	if len(m.entries) <= pageSize {
+		m.scrollOffset = 0
+		return
+	}
+
+	// Adjust scrollOffset if cursor is too close to the top of the viewport
+	if m.cursor < m.scrollOffset+scrollBuffer {
+		m.scrollOffset = m.cursor - scrollBuffer
+	}
+
+	// Adjust scrollOffset if cursor is too close to the bottom of the viewport
+	if m.cursor >= m.scrollOffset+pageSize-scrollBuffer {
+		m.scrollOffset = m.cursor - pageSize + 1 + scrollBuffer
+	}
+
+	// Clamp scrollOffset
+	maxScroll := len(m.entries) - pageSize
+	if m.scrollOffset > maxScroll {
+		m.scrollOffset = maxScroll
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+}
+
 func (m Model) nextSong() (tea.Model, tea.Cmd) {
 	if len(m.playingEntries) == 0 {
 		m.loading = false
@@ -211,6 +248,7 @@ func (m Model) nextSong() (tea.Model, tea.Cmd) {
 			m.playingIndex = nextIdx
 			if m.currPath == m.playingPath {
 				m.cursor = nextIdx
+				m.adjustScrollOffset()
 			}
 			return m, m.playEntry(m.playingEntries[nextIdx])
 		}
@@ -292,7 +330,14 @@ func (m Model) View() string {
 	if len(m.entries) == 0 {
 		s.WriteString("  (empty folder)\n")
 	}
-	for i, entry := range m.entries {
+
+	end := m.scrollOffset + pageSize
+	if end > len(m.entries) {
+		end = len(m.entries)
+	}
+
+	for i := m.scrollOffset; i < end; i++ {
+		entry := m.entries[i]
 		cursor := " "
 		if m.cursor == i {
 			cursor = ">"
