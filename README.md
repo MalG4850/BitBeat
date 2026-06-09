@@ -53,14 +53,12 @@ BitBeat is organized into several internal modules that work together to provide
    cd BitBeat
    ```
 
-2. **Install dependencies:**
+2. **Build the application (Offline / Vendored):**
+   The project dependencies are vendored directly in the `vendor/` folder, meaning you do not need an active internet connection to download dependencies on a fresh machine.
+   
+   Build the binary using the baked-in dependencies:
    ```bash
-   go mod tidy
-   ```
-
-3. **Build the application:**
-   ```bash
-   go build -o bitbeat main.go
+   go build -mod=vendor -o bitbeat main.go
    ```
 
 ---
