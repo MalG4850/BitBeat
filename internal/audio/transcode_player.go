@@ -23,7 +23,9 @@ func (p *pcmDecoder) Read(buf []byte) (int, error) {
 	p.mu.Unlock()
 	if err == io.EOF {
 		p.engine.mu.Lock()
-		p.engine.eofReached = true
+		if p.engine.decoder == p {
+			p.engine.eofReached = true
+		}
 		p.engine.mu.Unlock()
 	}
 	return n, err

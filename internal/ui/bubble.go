@@ -104,6 +104,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currSec, m.totSec = m.engine.GetProgress()
 		m.status = m.engine.GetStatus()
 		if m.err == nil && !m.loading && m.engine.IsFinished() {
+			// Check for premature EOF/interruption (e.g. connection cut off)
+			if m.totSec > 0 && m.currSec < m.totSec-3.0 {
+				m.err = fmt.Errorf("playback interrupted: connection lost or stream ended prematurely")
+				m.loading = false
+				m.engine.Stop()
+				return m, tick()
+			}
 			m.loading = true
 			m.currSec = 0
 			m.totSec = 0
@@ -173,6 +180,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.currPath = entry.Path
 						m.cursor = 0
 						m.scrollOffset = 0
+						m.err = nil
 						return m, m.fetchEntries(m.currPath)
 					}
 					m.playingEntries = m.entries
@@ -181,6 +189,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loading = true
 					m.currSec = 0
 					m.totSec = 0
+					m.err = nil
 					return m, m.playEntry(entry)
 				}
 			case "backspace":
@@ -190,8 +199,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.currPath = strings.Join(parts[:len(parts)-1], "/")
 						m.cursor = 0
 						m.scrollOffset = 0
+						m.err = nil
 						return m, m.fetchEntries(m.currPath)
 					}
+				}
+			case "esc":
+				if m.err != nil {
+					m.err = nil
+					return m, nil
 				}
 			case "l":
 				m.state = stateInputting
@@ -204,6 +219,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if m.status == audio.StatusPaused {
 					m.engine.Play()
 					m.status = audio.StatusPlaying
+				}
+			case m.config.Keybindings.NextTrack:
+				if !m.loading {
+					m.engine.Stop()
+					m.loading = true
+					m.currSec = 0
+					m.totSec = 0
+					m.err = nil
+					nextModel, nextCmd := m.nextSong()
+					return nextModel, nextCmd
+				}
+			case m.config.Keybindings.PrevTrack:
+				if !m.loading {
+					m.engine.Stop()
+					m.loading = true
+					m.currSec = 0
+					m.totSec = 0
+					m.err = nil
+					prevModel, prevCmd := m.prevSong()
+					return prevModel, prevCmd
 				}
 			}
 		}
@@ -261,6 +296,43 @@ func (m Model) nextSong() (tea.Model, tea.Cmd) {
 			return m, m.playEntry(m.playingEntries[nextIdx])
 		}
 		nextIdx = (nextIdx + 1) % len(m.playingEntries)
+	}
+
+	// If we looped back and it's not a folder, play it anyway
+	if !m.playingEntries[startIdx].IsFolder {
+		m.currSec = 0
+		m.totSec = 0
+		return m, m.playEntry(m.playingEntries[startIdx])
+	}
+
+	m.loading = false
+	m.engine.Stop()
+	return m, nil
+}
+
+func (m Model) prevSong() (tea.Model, tea.Cmd) {
+	if len(m.playingEntries) == 0 {
+		m.loading = false
+		m.engine.Stop()
+		return m, nil
+	}
+
+	startIdx := m.playingIndex
+	prevIdx := (startIdx - 1 + len(m.playingEntries)) % len(m.playingEntries)
+
+	// Find previous non-folder entry
+	for prevIdx != startIdx {
+		if !m.playingEntries[prevIdx].IsFolder {
+			m.playingIndex = prevIdx
+			if m.currPath == m.playingPath {
+				m.cursor = prevIdx
+				m.adjustScrollOffset()
+			}
+			m.currSec = 0
+			m.totSec = 0
+			return m, m.playEntry(m.playingEntries[prevIdx])
+		}
+		prevIdx = (prevIdx - 1 + len(m.playingEntries)) % len(m.playingEntries)
 	}
 
 	// If we looped back and it's not a folder, play it anyway

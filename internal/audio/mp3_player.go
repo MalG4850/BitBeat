@@ -29,7 +29,9 @@ func (m *mp3DecoderWrap) Read(p []byte) (n int, err error) {
 	n, err = m.Decoder.Read(p)
 	if err == io.EOF {
 		m.engine.mu.Lock()
-		m.engine.eofReached = true
+		if m.engine.decoder == m {
+			m.engine.eofReached = true
+		}
 		m.engine.mu.Unlock()
 	}
 	return n, err

@@ -48,6 +48,7 @@ type Engine struct {
 	
 	eofReached bool
 	done       chan struct{}
+	currentURL string
 }
 
 func NewEngine() (*Engine, error) {
@@ -80,6 +81,7 @@ func (e *Engine) LoadStream(stream io.ReadCloser, filename string, url string) e
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	e.decoder = nil
 	if e.player != nil {
 		e.player.Close()
 	}
@@ -98,9 +100,18 @@ func (e *Engine) LoadStream(stream io.ReadCloser, filename string, url string) e
 
 	isTranscodedFormat := isM4A || isAAC || isOpus
 
-	// Try to get duration using ffprobe
-	duration, _ := probeDuration(url)
-	e.totalSeconds = duration
+	e.totalSeconds = 0
+	e.currentURL = url
+	go func(targetURL string) {
+		duration, _ := probeDuration(targetURL)
+		if duration > 0 {
+			e.mu.Lock()
+			if e.currentURL == targetURL {
+				e.totalSeconds = duration
+			}
+			e.mu.Unlock()
+		}
+	}(url)
 
 	if isTranscodedFormat {
 		if !hasFFmpeg() {
@@ -187,8 +198,9 @@ func (e *Engine) Stop() {
 	defer e.mu.Unlock()
 	if e.player != nil {
 		e.player.Pause()
-		e.status = StatusStopped
 	}
+	e.status = StatusStopped
+	e.eofReached = false
 }
 
 func (e *Engine) SetVolume(volume float64) {
