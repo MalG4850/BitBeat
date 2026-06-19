@@ -25,7 +25,6 @@ const (
 )
 
 const (
-	pageSize     = 10
 	scrollBuffer = 2
 )
 
@@ -248,23 +247,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) adjustScrollOffset() {
-	if len(m.entries) <= pageSize {
+	ps := m.getPageSize()
+	if len(m.entries) <= ps {
 		m.scrollOffset = 0
 		return
 	}
 
+	sb := scrollBuffer
+	if ps <= 2*scrollBuffer {
+		sb = 0
+	}
+
 	// Adjust scrollOffset if cursor is too close to the top of the viewport
-	if m.cursor < m.scrollOffset+scrollBuffer {
-		m.scrollOffset = m.cursor - scrollBuffer
+	if m.cursor < m.scrollOffset+sb {
+		m.scrollOffset = m.cursor - sb
 	}
 
 	// Adjust scrollOffset if cursor is too close to the bottom of the viewport
-	if m.cursor >= m.scrollOffset+pageSize-scrollBuffer {
-		m.scrollOffset = m.cursor - pageSize + 1 + scrollBuffer
+	if m.cursor >= m.scrollOffset+ps-sb {
+		m.scrollOffset = m.cursor - ps + 1 + sb
 	}
 
 	// Clamp scrollOffset
-	maxScroll := len(m.entries) - pageSize
+	maxScroll := len(m.entries) - ps
 	if m.scrollOffset > maxScroll {
 		m.scrollOffset = maxScroll
 	}
@@ -411,7 +416,8 @@ func (m Model) View() string {
 			s.WriteString("  (empty folder)\n")
 		}
 
-		end := m.scrollOffset + pageSize
+		ps := m.getPageSize()
+		end := m.scrollOffset + ps
 		if end > len(m.entries) {
 			end = len(m.entries)
 		}
@@ -433,7 +439,17 @@ func (m Model) View() string {
 				icon = "󰎆" // file/music
 			}
 
-			s.WriteString(fmt.Sprintf("%s %s %s\n", cursor, icon, style.Render(entry.Name)))
+			displayName := entry.Name
+			maxNameLen := 45
+			if m.width > 12 {
+				maxNameLen = m.width - 12
+			}
+			if maxNameLen < 20 {
+				maxNameLen = 20
+			}
+			displayName = truncateString(displayName, maxNameLen)
+
+			s.WriteString(fmt.Sprintf("%s %s %s\n", cursor, icon, style.Render(displayName)))
 		}
 
 		s.WriteString("\n")
@@ -478,8 +494,33 @@ func (m Model) View() string {
 	}
 
 	if m.width > 0 && m.height > 0 {
-		centeredContent := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(content)
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, centeredContent)
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 	}
 	return content
+}
+
+func (m Model) getPageSize() int {
+	if m.height <= 0 {
+		return 10
+	}
+	nonListHeight := 8
+	if m.status != audio.StatusStopped {
+		nonListHeight = 9
+	}
+	size := m.height - nonListHeight - 2 // 2 lines of padding/margins
+	if size < 3 {
+		return 3
+	}
+	return size
+}
+
+func truncateString(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	if maxLen < 3 {
+		return string(runes[:maxLen])
+	}
+	return string(runes[:maxLen-3]) + "..."
 }

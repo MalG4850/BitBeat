@@ -108,6 +108,65 @@ This is done asynchronously before playback begins, ensuring the user always see
 
 ---
 
+Here is how you can install and run BitBeat on each of your target systems:
+  ──────
+### 1. Arch Linux Laptop (AMD64)
+
+  • Binary to use:  bitbeat-linux-amd64  (located in your root directory).
+  • Dependencies: You already have the required packages, but if you need to install them on another Arch laptop:
+    sudo pacman -S alsa-lib
+
+  • How to run:
+    chmod +x bitbeat-linux-amd64
+    ./bitbeat-linux-amd64
+
+  ──────
+### 2. Debian Laptop (AMD64)
+
+  • How to install: Since Debian has an older  glibc  than Arch, compile it natively on the Debian laptop to link
+  against its local C library:
+    # Install Go compiler and ALSA headers
+    sudo apt update
+    sudo apt install golang libasound2-dev
+
+    # Compile from the project directory
+    go build -ldflags="-s -w" -trimpath -o bitbeat-linux-amd64 main.go
+
+  • How to run:
+    chmod +x bitbeat-linux-amd64
+    ./bitbeat-linux-amd64
+
+  ──────
+### 3. Termux  proot-distro  Container (Debian or Arch ARM64)
+
+  • Binary to use:  bitbeat-linux-arm64  (located in your root directory).
+  • Dependencies: Move this binary into your container, and install the user-space ALSA library:
+      • Debian/Ubuntu Container:
+        apt update && apt install libasound2
+
+      • Arch Linux Container:
+        pacman -Sy alsa-lib
+
+  • How to run:
+    chmod +x bitbeat-linux-arm64
+    ./bitbeat-linux-arm64
+
+  ──────
+### 4. Native Termux (ARM64)
+
+  • How to install: Due to Android using  Bionic libc  instead of  glibc , it is best to compile natively inside
+  Termux:
+    # Install Go compiler and Pulseaudio inside Termux
+    pkg install golang pulseaudio
+
+    # Compile the binary
+    go build -ldflags="-s -w" -trimpath -o bitbeat-termux main.go
+
+  • How to run:
+  Start the Pulseaudio daemon (required for native Termux audio output), then run the application:
+    pulseaudio --start
+    ./bitbeat-termux
+
 ## 🤝 Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
