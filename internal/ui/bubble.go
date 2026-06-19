@@ -494,24 +494,26 @@ func (m Model) View() string {
 	}
 
 	if m.width > 0 && m.height > 0 {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+		contentHeight := lipgloss.Height(content)
+		contentWidth := lipgloss.Width(content)
+
+		vAlign := lipgloss.Center
+		if m.height < contentHeight {
+			vAlign = lipgloss.Top
+		}
+
+		hAlign := lipgloss.Center
+		if m.width < contentWidth {
+			hAlign = lipgloss.Left
+		}
+
+		return lipgloss.Place(m.width, m.height, hAlign, vAlign, content)
 	}
 	return content
 }
 
 func (m Model) getPageSize() int {
-	if m.height <= 0 {
-		return 10
-	}
-	nonListHeight := 8
-	if m.status != audio.StatusStopped {
-		nonListHeight = 9
-	}
-	size := m.height - nonListHeight - 2 // 2 lines of padding/margins
-	if size < 3 {
-		return 3
-	}
-	return size
+	return 10
 }
 
 func truncateString(s string, maxLen int) string {
