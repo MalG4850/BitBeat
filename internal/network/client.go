@@ -22,10 +22,9 @@ type Client struct {
 }
 
 func NewClient(baseURL string) *Client {
-	sc, _ := soundcloudapi.New(soundcloudapi.APIOptions{})
 	return &Client{
 		BaseURL:  baseURL,
-		scClient: sc,
+		scClient: nil,
 	}
 }
 
