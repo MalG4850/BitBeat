@@ -3,6 +3,8 @@ package audio
 import (
 	"fmt"
 	"io"
+	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -103,6 +105,11 @@ func (e *Engine) LoadStream(stream io.ReadCloser, filename string, url string) e
 	e.totalSeconds = 0
 	e.currentURL = url
 	go func(targetURL string) {
+		f, _ := os.OpenFile("probe.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if f != nil {
+			_, _ = f.WriteString(fmt.Sprintf("Goroutine started for URL: %s\n", targetURL))
+			f.Close()
+		}
 		duration, _ := probeDuration(targetURL)
 		if duration > 0 {
 			e.mu.Lock()
@@ -165,8 +172,55 @@ func probeDuration(url string) (float64, error) {
 	if url == "" {
 		return 0, fmt.Errorf("empty URL")
 	}
+
+	// 1. Try fetching first 200KB via HTTP Range request to parse duration quickly
+	req, err := http.NewRequest("GET", url, nil)
+	if err == nil {
+		req.Header.Set("Range", "bytes=0-200000")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent {
+				cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "-")
+				cmd.Stdin = resp.Body
+				out, err := cmd.Output()
+				if err == nil {
+					var duration float64
+					fmt.Sscanf(string(out), "%f", &duration)
+					if duration > 0 {
+						// Write debug info to probe.log
+						f, _ := os.OpenFile("probe.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+						if f != nil {
+							_, _ = f.WriteString(fmt.Sprintf("URL: %s\nRange-probed Duration: %f\n\n", url, duration))
+							f.Close()
+						}
+						return duration, nil
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Fallback to full URL probing
 	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", url)
 	out, err := cmd.Output()
+
+	// Logging code
+	f, _ := os.OpenFile("probe.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if f != nil {
+		if err != nil {
+			stderrMsg := ""
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				stderrMsg = string(exitErr.Stderr)
+			}
+			_, _ = f.WriteString(fmt.Sprintf("URL: %s\nFallback Error: %v\nStderr: %s\n\n", url, err, stderrMsg))
+		} else {
+			_, _ = f.WriteString(fmt.Sprintf("URL: %s\nFallback Output: %s\n\n", url, strings.TrimSpace(string(out))))
+		}
+		f.Close()
+	}
+
 	if err != nil {
 		return 0, err
 	}

@@ -14,7 +14,6 @@ BitBeat is a high-performance, terminal-based audio player designed for seamless
 - **🎨 Polished TUI:** Built with the Charmbracelet `bubbletea` and `lipgloss` ecosystem for a beautiful, responsive terminal experience.
 
 ---
-
 ## 🏗️ Architecture
 
 BitBeat is organized into several internal modules that work together to provide a smooth audio experience:

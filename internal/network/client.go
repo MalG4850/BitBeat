@@ -40,7 +40,7 @@ func (c *Client) FetchEntries(path string) ([]Entry, error) {
 	}
 
 	// Fallback to original behavior or other parsers
-	resp, err := http.Get(c.BaseURL)
+	resp, err := c.get(c.BaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (c *Client) fetchCodebergEntries(path string) ([]Entry, error) {
 	repo := parts[2]
 
 	apiURL := fmt.Sprintf("https://codeberg.org/api/v1/repos/%s/%s/contents/%s", owner, repo, path)
-	resp, err := http.Get(apiURL)
+	resp, err := c.get(apiURL)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (c *Client) GetSoundCloudStream(url string) (string, error) {
 }
 
 func (c *Client) GetStream(url string) (http.Response, error) {
-	resp, err := http.Get(url)
+	resp, err := c.get(url)
 	if err != nil {
 		return http.Response{}, err
 	}
@@ -181,4 +181,13 @@ func (c *Client) GetStream(url string) (http.Response, error) {
 		return http.Response{}, fmt.Errorf("failed to get stream: status %d", resp.StatusCode)
 	}
 	return *resp, nil
+}
+
+func (c *Client) get(url string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	return http.DefaultClient.Do(req)
 }
