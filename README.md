@@ -109,7 +109,7 @@ This is done asynchronously before playback begins, ensuring the user always see
 ---
 
 ## 🤝 Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request. I also accept suggestions and improvements :)
 
 ## 📄 License
 This project is licensed under the GPLv3 License - see the LICENSE file for details.
