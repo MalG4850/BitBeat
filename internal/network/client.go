@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strings"
 
 	soundcloudapi "github.com/zackradisic/soundcloud-api"
@@ -29,6 +31,11 @@ func NewClient(baseURL string) *Client {
 }
 
 func (c *Client) FetchEntries(path string) ([]Entry, error) {
+	// Detection for Archive.org links
+	if strings.Contains(c.BaseURL, "archive.org") {
+		return c.fetchArchiveEntries()
+	}
+
 	// Simple detection for SoundCloud links
 	if strings.Contains(c.BaseURL, "soundcloud.com") {
 		return c.fetchSoundCloudEntries(path)
@@ -71,6 +78,67 @@ func (c *Client) FetchEntries(path string) ([]Entry, error) {
 			IsFolder: false,
 			URL:      t.URL,
 		})
+	}
+
+	return entries, nil
+}
+
+func (c *Client) fetchArchiveEntries() ([]Entry, error) {
+	// Isolate the item ID from full URLs
+	itemID := c.BaseURL
+	itemID = strings.TrimPrefix(itemID, "https://archive.org/details/")
+	itemID = strings.TrimPrefix(itemID, "https://archive.org/download/")
+	itemID = strings.TrimSuffix(itemID, "/")
+
+	apiURL := fmt.Sprintf("https://archive.org/metadata/%s", itemID)
+	resp, err := c.get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("Archive.org request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Archive.org API error: status %d", resp.StatusCode)
+	}
+
+	var data struct {
+		Files []struct {
+			Name   string `json:"name"`
+			Format string `json:"format"`
+			Title  string `json:"title"`
+			Artist string `json:"artist"`
+		} `json:"files"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("failed to parse Archive.org JSON: %w", err)
+	}
+
+	var entries []Entry
+	for _, f := range data.Files {
+		ext := strings.ToLower(filepath.Ext(f.Name))
+		if ext == ".mp3" || ext == ".m4a" {
+			escapedFileName := url.PathEscape(f.Name)
+			streamURL := fmt.Sprintf("https://archive.org/download/%s/%s", itemID, escapedFileName)
+
+			displayName := f.Title
+			if strings.TrimSpace(displayName) == "" {
+				displayName = strings.TrimSuffix(filepath.Base(f.Name), ext)
+			}
+			if strings.TrimSpace(f.Artist) != "" {
+				displayName = fmt.Sprintf("%s - %s", f.Artist, displayName)
+			}
+
+			entries = append(entries, Entry{
+				Name:     displayName,
+				IsFolder: false,
+				URL:      streamURL,
+			})
+		}
+	}
+
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no .mp3 or .m4a tracks found in Archive item: %s", itemID)
 	}
 
 	return entries, nil

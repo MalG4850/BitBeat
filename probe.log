@@ -10,3 +10,15 @@ Output: 223.013333
 URL: https://codeberg.org/MalG4850/MyMusic/raw/branch/main/Hindi/Character%20Dheela%20%E2%80%94%20Pritam%2C%20Neeraj%20Shridhar%2C%20Amrita%20Kak.m4a
 Output: 225.187120
 
+Goroutine started for URL: https://cf-media.sndcdn.com/7ZVW8k1DHXoA.128.mp3?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiKjovL2NmLW1lZGlhLnNuZGNkbi5jb20vN1pWVzhrMURIWG9BLjEyOC5tcDMqIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzg4NjA5NTEwfX19XX0_&Signature=ErMosunrCZWK-ZXIv~QgUQ9~L-wV0sAaARfxj1bkReInBEVokGahwyRV1dznGQ0lsX8MnweXNxWgXWpsnqnK9P8Xj4C9CDVBAAzoXUfhS3UbCm6vqPbI8v57W7iV30R1crC1aLwl3a1IElKOVwT7DxLShO9~Fmgmfx3ss0M3xy6P2eeGKKg~zmi~bDX5V4LR4QVJWNGWWNmbuBhS-I8h-kn1viGOBDUfGdbOGWNkFOdumfv9kZm6CkysfIJB0GvJZ6qXFlGbtb2BXYcf4WnALvWEtL0QYodIa0nnHYWaIixqUws~3um6npnprnzVcx9Cqzp2Ykip2QR87xWjQtz1sg__&Key-Pair-Id=APKAI6TU7MMXM5DG6EPQ
+URL: https://cf-media.sndcdn.com/7ZVW8k1DHXoA.128.mp3?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiKjovL2NmLW1lZGlhLnNuZGNkbi5jb20vN1pWVzhrMURIWG9BLjEyOC5tcDMqIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzg4NjA5NTEwfX19XX0_&Signature=ErMosunrCZWK-ZXIv~QgUQ9~L-wV0sAaARfxj1bkReInBEVokGahwyRV1dznGQ0lsX8MnweXNxWgXWpsnqnK9P8Xj4C9CDVBAAzoXUfhS3UbCm6vqPbI8v57W7iV30R1crC1aLwl3a1IElKOVwT7DxLShO9~Fmgmfx3ss0M3xy6P2eeGKKg~zmi~bDX5V4LR4QVJWNGWWNmbuBhS-I8h-kn1viGOBDUfGdbOGWNkFOdumfv9kZm6CkysfIJB0GvJZ6qXFlGbtb2BXYcf4WnALvWEtL0QYodIa0nnHYWaIixqUws~3um6npnprnzVcx9Cqzp2Ykip2QR87xWjQtz1sg__&Key-Pair-Id=APKAI6TU7MMXM5DG6EPQ
+Range-probed Duration: 254.145306
+
+Goroutine started for URL: https://archive.org/download/malg4850-music/My%20Music%2FEnglish%2FMetal%2F11th%20Hour%20%28Remixed-Remastered%29%20%E2%80%94%20Lamb%20Of%20God.m4a
+URL: https://archive.org/download/malg4850-music/My%20Music%2FEnglish%2FMetal%2F11th%20Hour%20%28Remixed-Remastered%29%20%E2%80%94%20Lamb%20Of%20God.m4a
+Range-probed Duration: 223.013333
+
+Goroutine started for URL: https://archive.org/download/malg4850-music/My%20Music%2FEnglish%2FNew%20n%20Heavy%2FTame%20Impala%20%E2%80%94%20Loser.m4a
+URL: https://archive.org/download/malg4850-music/My%20Music%2FEnglish%2FNew%20n%20Heavy%2FTame%20Impala%20%E2%80%94%20Loser.m4a
+Range-probed Duration: 223.352744
+

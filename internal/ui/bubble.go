@@ -62,7 +62,7 @@ type Model struct {
 
 func NewModel(cfg *config.Config, client *network.Client, engine *audio.Engine) Model {
 	ti := textinput.New()
-	ti.Placeholder = "Enter repository link (e.g. Codeberg)..."
+	ti.Placeholder = "Enter music link (e.g. Codeberg, Archive.org, SoundCloud)..."
 	ti.Focus()
 	ti.CharLimit = 156
 	ti.Width = 50
@@ -73,7 +73,7 @@ func NewModel(cfg *config.Config, client *network.Client, engine *audio.Engine) 
 	titleInput.Width = 50
 
 	urlInput := textinput.New()
-	urlInput.Placeholder = "Enter URL (Codeberg or SoundCloud)..."
+	urlInput.Placeholder = "Enter URL (Codeberg, Archive.org, SoundCloud)..."
 	urlInput.CharLimit = 156
 	urlInput.Width = 50
 
@@ -124,10 +124,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currSec, m.totSec = m.engine.GetProgress()
 		m.status = m.engine.GetStatus()
 
-		// Write debug ticks log
+		// Write debug ticks log using direct Fprintf formatting
 		f, _ := os.OpenFile("debug_ticks.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if f != nil {
-			_, _ = f.WriteString(fmt.Sprintf("[%s] currSec: %f, totSec: %f, status: %v, state: %v\n", time.Now().Format("15:04:05"), m.currSec, m.totSec, m.status, m.state))
+			_, _ = fmt.Fprintf(f, "[%s] currSec: %f, totSec: %f, status: %v, state: %v\n", time.Now().Format("15:04:05"), m.currSec, m.totSec, m.status, m.state)
 			f.Close()
 		}
 
@@ -406,10 +406,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textInput.Focus()
 				return m, nil
 			case m.config.Keybindings.PlayPause:
-				if m.status == audio.StatusPlaying {
+				switch m.status {
+				case audio.StatusPlaying:
 					m.engine.Pause()
 					m.status = audio.StatusPaused
-				} else if m.status == audio.StatusPaused {
+				case audio.StatusPaused:
 					m.engine.Play()
 					m.status = audio.StatusPlaying
 				}
@@ -581,29 +582,21 @@ func (m Model) renderPlayerStatus() string {
 	}
 
 	statusStr := "[STOPPED]"
-	if m.status == audio.StatusPlaying {
+	switch m.status {
+	case audio.StatusPlaying:
 		statusStr = "[PLAYING]"
-	} else if m.status == audio.StatusPaused {
+	case audio.StatusPaused:
 		statusStr = "[PAUSED]"
 	}
 
-	progressBarWidth := m.width - 30
-	if progressBarWidth < 10 {
-		progressBarWidth = 10
-	}
-	if progressBarWidth > 60 {
-		progressBarWidth = 60
-	}
+	progressBarWidth := max(10, min(m.width-30, 60))
 
 	progress := 0.0
 	if m.totSec > 0 {
 		progress = m.currSec / m.totSec
 	}
 
-	filled := int(progress * float64(progressBarWidth))
-	if filled > progressBarWidth {
-		filled = progressBarWidth
-	}
+	filled := min(int(progress*float64(progressBarWidth)), progressBarWidth)
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", progressBarWidth-filled)
 
 	return fmt.Sprintf("%s [%s] %02d:%02d / %02d:%02d\n",
@@ -647,7 +640,7 @@ func (m Model) View() string {
 				if m.menuCursor == i {
 					style = style.Foreground(lipgloss.Color("2")).Bold(true)
 				}
-				s.WriteString(fmt.Sprintf("%s %s\n", cursor, style.Render(opt)))
+				fmt.Fprintf(&s, "%s %s\n", cursor, style.Render(opt))
 			}
 
 			// Show player status if a song is playing in the background
@@ -681,7 +674,7 @@ func (m Model) View() string {
 				if m.menuCursor == i {
 					style = style.Foreground(lipgloss.Color("2")).Bold(true)
 				}
-				s.WriteString(fmt.Sprintf("%s %s\n", cursor, style.Render(entry.Title)))
+				fmt.Fprintf(&s, "%s %s\n", cursor, style.Render(entry.Title))
 			}
 
 			// Add an Entry option
@@ -693,7 +686,7 @@ func (m Model) View() string {
 			if m.menuCursor == len(m.savedEntries) {
 				addStyle = addStyle.Foreground(lipgloss.Color("2")).Bold(true)
 			}
-			s.WriteString(fmt.Sprintf("%s %s\n", addCursor, addStyle.Render("+ Add an Entry")))
+			fmt.Fprintf(&s, "%s %s\n", addCursor, addStyle.Render("+ Add an Entry"))
 
 			// Show player status if playing
 			if m.status != audio.StatusStopped {
@@ -729,7 +722,7 @@ func (m Model) View() string {
 
 		case stateInputting:
 			content = fmt.Sprintf(
-				"Enter Repository URL:\n\n%s\n\n(esc to cancel)",
+				"Enter Music Link (e.g. Codeberg, Archive.org, SoundCloud):\n\n%s\n\n(esc to cancel)",
 				m.textInput.View(),
 			) + "\n"
 
@@ -743,7 +736,7 @@ func (m Model) View() string {
 				Padding(0, 1)
 			s.WriteString(headerStyle.Render("BitBeat - Terminal Audio Engine"))
 			s.WriteString("\n")
-			s.WriteString(fmt.Sprintf("Path: /%s\n\n", m.currPath))
+			fmt.Fprintf(&s, "Path: /%s\n\n", m.currPath)
 
 			// Entry List
 			if len(m.entries) == 0 {
@@ -751,10 +744,7 @@ func (m Model) View() string {
 			}
 
 			ps := m.getPageSize()
-			end := m.scrollOffset + ps
-			if end > len(m.entries) {
-				end = len(m.entries)
-			}
+			end := min(m.scrollOffset+ps, len(m.entries))
 
 			for i := m.scrollOffset; i < end; i++ {
 				entry := m.entries[i]
@@ -783,7 +773,7 @@ func (m Model) View() string {
 				}
 				displayName = truncateString(displayName, maxNameLen)
 
-				s.WriteString(fmt.Sprintf("%s %s %s\n", cursor, icon, style.Render(displayName)))
+				fmt.Fprintf(&s, "%s %s %s\n", cursor, icon, style.Render(displayName))
 			}
 
 			s.WriteString("\n")
@@ -813,10 +803,7 @@ func (m Model) View() string {
 		}
 
 		placed := lipgloss.Place(m.width, m.height, hAlign, vAlign, content)
-		maxLines := m.height - 1
-		if maxLines < 1 {
-			maxLines = 1
-		}
+		maxLines := max(1, m.height-1)
 		return limitLines(placed, maxLines)
 	}
 	return content
