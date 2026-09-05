@@ -36,28 +36,49 @@ func LoadEntries() ([]Entry, error) {
 	return entries, nil
 }
 
-// SaveEntry saves a new entry to the file
-func SaveEntry(title, url string) error {
-	// Load existing entries
-	entries, err := LoadEntries()
-	if err != nil {
-		return err
-	}
-
-	// Add new entry
-	entries = append(entries, Entry{Title: title, URL: url})
-
-	// Create directory if it doesn't exist
+// SaveAllEntries marshals and writes a full slice of entries back to disk
+func SaveAllEntries(entries []Entry) error {
 	dir := filepath.Dir(savedEntriesFile)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	// Write entries back to file
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
 		return err
 	}
 
 	return os.WriteFile(savedEntriesFile, data, 0644)
+}
+
+// SaveEntry saves a new entry to the file
+func SaveEntry(title, url string) error {
+	entries, err := LoadEntries()
+	if err != nil {
+		return err
+	}
+
+	entries = append(entries, Entry{Title: title, URL: url})
+	return SaveAllEntries(entries)
+}
+
+// DeleteEntry removes an entry at the specified index and writes the updated list back to disk
+func DeleteEntry(index int) ([]Entry, error) {
+	entries, err := LoadEntries()
+	if err != nil {
+		return nil, err
+	}
+
+	if index < 0 || index >= len(entries) {
+		return entries, nil
+	}
+
+	// Remove item at index
+	entries = append(entries[:index], entries[index+1:]...)
+
+	if err := SaveAllEntries(entries); err != nil {
+		return nil, err
+	}
+
+	return entries, nil
 }

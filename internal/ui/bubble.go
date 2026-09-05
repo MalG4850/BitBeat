@@ -233,6 +233,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.menuCursor < len(m.savedEntries) {
 					m.menuCursor++
 				}
+			case "d", "x":
+				// Trigger entry deletion if cursor is on an actual saved entry
+				if m.menuCursor < len(m.savedEntries) {
+					updatedEntries, err := saved.DeleteEntry(m.menuCursor)
+					if err != nil {
+						m.err = err
+					} else {
+						m.savedEntries = updatedEntries
+						// Clamp cursor if deletion pushes it out of bounds
+						if m.menuCursor >= len(m.savedEntries) && m.menuCursor > 0 {
+							m.menuCursor--
+						}
+					}
+				}
 			case "enter":
 				if m.menuCursor < len(m.savedEntries) {
 					// Load selected saved entry
@@ -694,7 +708,7 @@ func (m Model) View() string {
 				s.WriteString(m.renderPlayerStatus())
 			}
 
-			s.WriteString("\nPress 'backspace' or 'esc' to go back, 'q' to quit.\n")
+			s.WriteString("\nPress 'd' to delete entry, 'backspace' or 'esc' to go back, 'q' to quit.\n")
 			content = s.String()
 
 		case stateAddEntry:
